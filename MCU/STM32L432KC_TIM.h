@@ -15,5 +15,5 @@
 void initTIM(TIM_TypeDef * TIMx);
 void delay_millis(TIM_TypeDef * TIMx, uint32_t ms);
 void delay_micros(TIM_TypeDef * TIMx, uint32_t us);
-void TIM2_Config();
+void TIM2_Config(uint32_t ARR_val);
 #endif

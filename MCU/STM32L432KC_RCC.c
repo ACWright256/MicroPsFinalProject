@@ -5,9 +5,9 @@
 
 void configurePLL() {
    // Set clock to 80 MHz
-   // Output freq = (src_clk) * (N/M) / P
-   // (4 MHz) * (80/2) * 2  = 80 MHz
-   // M:, N:, P:
+   // Output freq = (src_clk) * (N/M) / R
+   // (4 MHz) * (80/2) / 2  = 80 MHz
+   // M:, N:, R:
    // Use HSI as PLLSRC
 
    RCC->CR &= ~_FLD2VAL(RCC_CR_PLLON, RCC->CR); // Turn off PLL

@@ -49,7 +49,7 @@ void configureADC(){
   ADC1->SQR1 &= ~ADC_SQR1_SQ1_Msk; // clear SQ1
   ADC1->SQR1 |= _VAL2FLD(ADC_SQR1_SQ1, 5); //1st & only conversion takes from analog channel 5
   ADC1->SMPR1 &= ~ADC_SMPR1_SMP1_Msk; //clear SMPR1
-  ADC1->SMPR1 |= _VAL2FLD(ADC_SMPR1_SMP1, 0b111); //Sampling @80 MHz and 47.5 ADC clock cycles
+  ADC1->SMPR1 |= _VAL2FLD(ADC_SMPR1_SMP1, 0b010); //Sampling @80 MHz and 12.5 ADC clock cycles
   
   // TIMER trigger and not continuous mode
   ADC1->CFGR &= ~ADC_CFGR_CONT_Msk; //Continuous conversion mode off since using TIM2 to signal conversions

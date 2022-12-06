@@ -24,13 +24,43 @@ Purpose : Generic application start
 */
 
 int main(void) {
+  //Flash and Clock Config
   configureFlash();
   configureClock();
+  //TIM1: delay timer
   RCC->APB2ENR |= _VAL2FLD(RCC_APB2ENR_TIM1EN, 0b1);
   initTIM(TIM1);
 
+  uint32_t static volatile var_counter_val = 25000;
+  RCC->AHB2ENR |= (RCC_AHB2ENR_GPIOAEN | RCC_AHB2ENR_GPIOBEN);
+  pinMode(PB0, GPIO_INPUT);
+  pinMode(PB7, GPIO_INPUT);
+  pinMode(PB6, GPIO_INPUT);
+  pinMode(PB1, GPIO_INPUT);
+  pinMode(PA8, GPIO_INPUT);
+  pinMode(PA1, GPIO_INPUT); 
+
+  if(digitalRead(PA8) == 1){
+    var_counter_val = 250000;
+  }
+  else if(digitalRead(PB1) == 1){
+    var_counter_val = 25000;
+  }
+  else if(digitalRead(PB6) == 1){
+    var_counter_val = 2500;
+  }
+  else if(digitalRead(PB7) == 1){
+    var_counter_val = 250;
+  }
+  else if(digitalRead(PB0) == 1){
+    var_counter_val = 25;
+  }
+  else if(digitalRead(PA1) == 1){
+    var_counter_val = 5;
+  }
+  
   gpioADCpin(); //set PA0 to analog input and clock to GPIOA
-  TIM2_Config(); //set TIM2 up to be used as the trigger for ADC conversion
+  TIM2_Config(var_counter_val); //set TIM2 up to be used as the trigger for ADC conversion
   configureDMA(); //initializing DMA for ADC to mem
   configureADC();
 

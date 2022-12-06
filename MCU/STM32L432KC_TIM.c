@@ -25,7 +25,7 @@ void delay_millis(TIM_TypeDef * TIMx, uint32_t ms){
   while(!(TIMx->SR & 1)); // Wait for UIF to go high
 }
 
-void TIM2_Config(){
+void TIM2_Config(uint32_t ARR_val){
   RCC->APB1ENR1 |= _VAL2FLD(RCC_APB1ENR1_TIM2EN, 0b1); //Enable clk to TIM2
   
   //pinMode(5, GPIO_ALT); // Pin 0 uses alt func
@@ -39,9 +39,10 @@ void TIM2_Config(){
   // Counter runs at 100 Hz
   // = 80MHz/(80*10000)
   //Test1: wavegen 1hz, sampling at 64hz, we see one period in memory
-  TIM2->PSC |= _VAL2FLD(TIM_PSC_PSC, 80); //Set Prescalar to 80
+  TIM2->PSC |= _VAL2FLD(TIM_PSC_PSC, 5); //Set Prescalar to 80
   TIM2->ARR &= ~TIM_ARR_ARR_Msk;
-  TIM2->ARR |= _VAL2FLD(TIM_ARR_ARR, 15000); //Set ARR to 10000
+  TIM2->ARR |= _VAL2FLD(TIM_ARR_ARR, ARR_val); //Set ARR to 10000
+  
 
   TIM2->CR1 &= ~TIM_CR1_DIR_Msk; //Counter used as upcounter
   TIM2->CR1 &= ~TIM_CR1_CMS_Msk; //Depends on DIR register
