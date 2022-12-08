@@ -1,8 +1,47 @@
 
 //**********************************************************************************************************************************************************//
-//																	DISPLAY CONTROL SECTION																	//
+//																	SPI and MEMORY SECTION																	//
 //**********************************************************************************************************************************************************//
 
+
+//////////////////////////////////////////////////////////////////////
+//							SPIWriteMem MODULE						//
+//	Contains both the SPI hardware and EBR memory control stuff		//
+//////////////////////////////////////////////////////////////////////
+/*module SPIWriteMemTest (input  logic clk,
+						input  logic sck, 
+						input  logic sdi,
+						input  logic CE,
+						input logic reset,
+						input logic get_buffer,
+						input logic [5:0] row_0_sel,
+						input logic [5:0] row_1_sel,
+						output logic sdo,
+						output logic [63:0] row_0,
+						output logic [63:0] row_1);
+	
+	
+	logic [383:0] data_frame_unpacked;
+	logic w_en;
+	logic r_en;
+	logic [5:0] y_in [63:0];
+	
+	//get the SPI data into matrix(wire) form
+	
+	WireArrayToMatrix MatrixStuff(data_frame_unpacked, y_in);
+	SPIIn TestSPI(clk, sck, sdi, CE, reset, sdo, data_frame_unpacked, w_en );
+	EBRController TestEBR(clk, reset, w_en,r_en,get_buffer, y_in, row_0_sel, row_1_sel, row_0, row_1  );
+
+
+endmodule*/
+
+
+
+
+
+//**********************************************************************************************************************************************************//
+//																	DISPLAY CONTROL SECTION																	//
+//**********************************************************************************************************************************************************//
 
 
 
@@ -12,7 +51,7 @@
 //							A TESTING MODULE						//
 //	Takes in two rows of color data	and drives the display			//
 //////////////////////////////////////////////////////////////////////
-module DisplayControllerColorInput #(WIDTH=4)(input logic clk,
+/*module DisplayControllerColorInput #(WIDTH=4)(input logic clk,
 												input logic reset,
 												input logic [WIDTH-1:0] r0_map_cm [63:0],
 												input logic [WIDTH-1:0] r1_map_cm [63:0],
@@ -54,7 +93,7 @@ module DisplayControllerColorInput #(WIDTH=4)(input logic clk,
 	//////// ColShift	////////
 	ColShift ColShiftModule (clk, reset, col_cnt_en,r0_cm_cs, r1_cm_cs, g0_cm_cs, g1_cm_cs, b0_cm_cs, b1_cm_cs, r0_out, r1_out, g0_out, g1_out, b0_out, b1_out, col_cnt_overflow,col_sck);
 	
-endmodule
+endmodule*/
 
 
 
@@ -80,7 +119,7 @@ module MemReadDisplay #(WIDTH=4)(   input logic clk,
 	  logic [63:0] write_buffer [63:0];
 	 
 	 
-	  assign write_buffer[0] =  64'b0000000000000000000111111111111111100000000000000000000000000000;
+	  /*assign write_buffer[0] =  64'b0000000000000000000111111111111111100000000000000000000000000000;
 	  assign write_buffer[1] =  64'b0000000000000011111000000000000000011111000000000000000000000000;
 	  assign write_buffer[2] =  64'b0000000000001100000000000000000000000000110000000000000000000000;
 	  assign write_buffer[3] =  64'b0000000000110000000000000000000000000000001100000000000000000000;
@@ -143,10 +182,10 @@ module MemReadDisplay #(WIDTH=4)(   input logic clk,
 	  assign write_buffer[60] = 64'b0000000000000000000000000000000000000000000000000000000000000000;
 	  assign write_buffer[61] = 64'b0000000000000000000000000000000000000000000000000000000000000000;
 	  assign write_buffer[62] = 64'b0000000000000000000000000000000000000000000000000000000000000000;
-	  assign write_buffer[63] = 64'b0000000000000000000000000000000000000000000000000000000000000000;
+	  assign write_buffer[63] = 64'b0000000000000000000000000000000000000000000000000000000000000000;*/
 
 
-	  /*assign write_buffer[0] =  64'b1000000000000000000000000000000000000000000000000000000000000000;
+	  assign write_buffer[0] =  64'b1000000000000000000000000000000000000000000000000000000000000000;
 	  assign write_buffer[1] =  64'b1100000000000000000000000000000000000000000000000000000000000000;
 	  assign write_buffer[2] =  64'b1110000000000000000000000000000000000000000000000000000000000000;
 	  assign write_buffer[3] =  64'b1111000000000000000000000000000000000000000000000000000000000000;
@@ -209,7 +248,7 @@ module MemReadDisplay #(WIDTH=4)(   input logic clk,
 	  assign write_buffer[60] = 64'b1111111111111111111111111111111111111111111111111111111111111000;
 	  assign write_buffer[61] = 64'b1111111111111111111111111111111111111111111111111111111111111100;
 	  assign write_buffer[62] = 64'b1111111111111111111111111111111111111111111111111111111111111110;
-	  assign write_buffer[63] = 64'b1111111111111111111111111111111111111111111111111111111111111111;*/
+	  assign write_buffer[63] = 64'b1111111111111111111111111111111111111111111111111111111111111111;
 	 
 	 
 	  logic [63:0] row_0_in;
@@ -227,14 +266,57 @@ module MemReadDisplay #(WIDTH=4)(   input logic clk,
 	 
 
 
-	  TESTEBRReadControl  TestMem(clk,reset,read_en,row_0_sel,row_1_sel,write_buffer, row_0_in,row_1_in );
+	  TESTMEMReadControl  TestMem(clk,reset,read_en,row_0_sel,row_1_sel,write_buffer, row_0_in,row_1_in );
+endmodule
+
+
+
+//////////////////////////////////////////////////////////////////////
+//							TESTEBRDisplay	MODULE					//
+//							A TESTING MODULE						//
+//////////////////////////////////////////////////////////////////////
+module TESTMemoryDisplay #(WIDTH=4)   (input logic clk,
+									input logic reset,
+									output logic r0_out,
+									output logic r1_out,
+									output logic g0_out,
+									output logic g1_out,
+									output logic b0_out,
+									output logic b1_out,  
+									output logic latch,
+									output logic OE,
+									output logic sck,
+									output logic [4:0] addr);
 	
+	logic [5:0] data_count;
+	logic  [5:0] data_frame [63:0];
+	logic data_ready;
+	
+	//data_count counter
+	always_ff @(posedge clk)begin
+		if(reset) data_count = 0;
+		else data_count = data_count+1;
+	end
+	
+	//stuff for "simulating" SPI in hardware
+	always_ff @(posedge clk)begin
+		if(data_count==4  )begin
+			data_ready <= 1;
+			for(int i = 0; i<64;i=i+1)begin
+				data_frame[i] <= i+data_count;
+			end
+		end
+		else data_ready <= 0;
+	end
+	
+	MemoryDisplay #(.WIDTH(WIDTH)) TestMod(clk, reset, data_frame, data_ready, r0_out, r1_out, g0_out, g1_out, b0_out, b1_out, latch, OE, sck, addr);
 	
 endmodule
 
 
 
-module TESTEBRReadControl  (input logic clk,
+
+module TESTMEMReadControl  (input logic clk,
 						input logic reset,
 						input logic r_en,
 						input logic [5:0] row_0_sel,

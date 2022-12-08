@@ -1,7 +1,15 @@
 /***************************************************************************************************************************/
 /*															MAIN.SV														   */
 /***************************************************************************************************************************/
-module top(	input logic r,
+
+
+
+module top(		input logic r,
+				input logic spi_sck,
+				input logic sdi,
+				input logic CE,
+				
+				output logic sdo,
 				output logic r0_out,
 				output logic r1_out,
 				output logic g0_out,
@@ -13,31 +21,59 @@ module top(	input logic r,
 				output logic sck,
 				output logic [4:0] addr);
 	logic clk;
-	logic int_osc;
 	logic reset;
-	logic read_en;
-	
 
-	
-	
 	assign reset = ~r;
 	
-	MemReadDisplay #(.WIDTH(4)) MemReadDisplayTest(int_osc,reset, r0_out,  r1_out,  g0_out,  g1_out, b0_out, b1_out,  latch,  OE,  sck, addr);
-
-	//DisplayController #(.WIDTH(4)) DisplayControllerTest(int_osc, reset, row_0_in, row_1_in, addr, OE, latch, r0_out, r1_out, g0_out, g1_out, b0_out, b1_out,sck,read_en);
+	
+	SPIDisplayController #(.WIDTH(6)) DisplayControl(reset, spi_sck, sdi, CE, clk, sdo, r0_out, r1_out, g0_out, g1_out, b0_out, b1_out, latch, OE, sck, addr);
 	
 	// Internal high-speed oscillator
 	HSOSC #(.CLKHF_DIV(2'b01))
-	hf_osc (.CLKHFPU(1'b1), .CLKHFEN(1'b1), .CLKHF(int_osc));	
+	hf_osc (.CLKHFPU(1'b1), .CLKHFEN(1'b1), .CLKHF(clk));	
 	
 
 endmodule
 
 
-
 //**********************************************************************************************************************************************************//
 //																	DISPLAY CONTROL SECTION																	//
 //**********************************************************************************************************************************************************//
+
+
+
+module SPIDisplayController #(WIDTH=4) (
+				input logic reset,
+				input logic spi_sck,
+				input logic sdi,
+				input logic CE,
+				input logic clk,
+				output logic sdo,
+				output logic r0_out,
+				output logic r1_out,
+				output logic g0_out,
+				output logic g1_out,
+				output logic b0_out,
+				output logic b1_out,  
+				output logic latch,
+				output logic OE,
+				output logic sck,
+				output logic [4:0] addr);
+	logic data_ready;
+	
+	logic [5:0] data_frame[63:0];
+	logic [383:0] unpacked_frame;
+	
+	WireArrayToMatrix ArrayToMatrixModule(unpacked_frame, data_frame);
+	
+	
+	SPIIn SpiModule (clk, spi_sck, sdi, CE, reset, sdo, unpacked_frame, data_ready);
+	MemoryDisplay #(.WIDTH(WIDTH)) DisplayModule(clk, reset, data_frame, data_ready, r0_out, r1_out, g0_out, g1_out, b0_out, b1_out, latch, OE, sck, addr );	
+	
+endmodule
+
+
+
 
 //////////////////////////////////////////////////////////////////////
 //						DISPLAYCONTROL	MODULE						//
@@ -92,6 +128,44 @@ module DisplayController #(WIDTH=4)(input logic clk,
 endmodule
 
 
+//////////////////////////////////////////////////////////////////////
+//						MemoryDisplay	MODULE						//
+//	Controls the Memory Display and double buffering				//
+//////////////////////////////////////////////////////////////////////
+
+module MemoryDisplay #(WIDTH=4)   (input logic clk,
+								input logic reset,
+								input logic  [5:0] data_frame [63:0],
+								input logic data_ready,
+								output logic r0_out,
+								output logic r1_out,
+								output logic g0_out,
+								output logic g1_out,
+								output logic b0_out,
+								output logic b1_out,  
+								output logic latch,
+								output logic OE,
+								output logic sck,
+								output logic [4:0] addr);
+	logic w_data_available;
+	logic r_enable;
+	logic get_buffer;
+	
+	logic [5:0] row_0_sel;
+	logic [5:0] row_1_sel;
+	
+	assign row_0_sel = addr;
+	assign row_1_sel = addr+32;
+	
+	logic [63:0] row_0_in;
+	logic [63:0] row_1_in;
+	//data ready is basically write enable (sort of)
+	
+	DisplayController #(.WIDTH(WIDTH)) DisplayControllerTest(clk, reset, row_0_in, row_1_in, addr, OE, latch, r0_out, r1_out, g0_out, g1_out, b0_out, b1_out,sck,r_enable);	
+	LevelMemControl MemController(clk, reset, data_ready, r_enable, data_frame, addr, row_0_in, row_1_in);
+	
+
+endmodule
 
 
 //**********************************************************************************************************************************************************//
@@ -99,18 +173,38 @@ endmodule
 //**********************************************************************************************************************************************************//
 
 
-//////////////////////////////////////////////////////////////////////
-//						RAMDISPLAY	MODULE			 				//
-//	Controls memory reading and displaying in a wrapper				//
-//////////////////////////////////////////////////////////////////////
-
-/*module RamDisplay #(WIDTH=4)   (input logic clk,
-								input logic reset,
-								
-						);
+module ToggleSynchronizer (input  logic clk_a,
+						   input  logic clk_b,
+						   input  logic pulse_in,
+						   output logic pulse_out);
+	logic qa;
+	logic muxed;
+	logic qb1;
+	logic qb2;
+	logic qb3;
 	
-endmodule*/
-
+	assign muxed = pulse_in ? ~qa: qa;
+	
+	//First Flop : a domain
+	always_ff @(posedge clk_a)begin
+		qa<= muxed;
+	end
+	//Second Flop: b domain
+	always_ff @(posedge clk_b)begin
+		qb1<= qa;
+	end
+	//Third Flop: b domain
+	always_ff @(posedge clk_b)begin
+		qb2<= qb1;
+	end
+	//Fourth Flop: b domain
+	always_ff @(posedge clk_b)begin
+		qb3<= qb2;
+	end		
+	
+	assign pulse_out = qb3^qb2;
+	
+endmodule
 
 
 
@@ -121,32 +215,117 @@ endmodule*/
 //////////////////////////////////////////////////////////////////////
 //							SPI MODULE								//
 //////////////////////////////////////////////////////////////////////
-module SPIIn #(WIDTH=512)(input  logic sck, 
+module SPIIn #(WIDTH=512)(
+			   input  logic clk,
+			   input  logic sck, 
                input  logic sdi,
+			   input  logic CE,
+			   input  logic reset,
                output logic sdo,
-               input  logic done,
-               output logic [WIDTH-1:0] key, plaintext,
-               input  logic [WIDTH-1:0] cyphertext);
-    logic         sdodelayed, wasdone;
-    logic [511:0] cyphertextcaptured;     
-    // assert load
-    // apply 256 sclks to shift in key and plaintext, starting with plaintext[127]
-    // then deassert load, wait until done
-    // then apply 128 sclks to shift out cyphertext, starting with cyphertext[127]
-    // SPI mode is equivalent to cpol = 0, cpha = 0 since data is sampled on first edge and the first
-    // edge is a rising edge (clock going from low in the idle state to high).
-    always_ff @(posedge sck)
-        if (!wasdone)  {cyphertextcaptured, plaintext, key} = {cyphertext, plaintext[WIDTH-2:0], key, sdi};
-        else           {cyphertextcaptured, plaintext, key} = {cyphertextcaptured[WIDTH-2:0], plaintext, key, sdi}; 
-    
-    // sdo should change on the negative edge of sck
-    always_ff @(negedge sck) begin
-        wasdone = done;
-        sdodelayed = cyphertextcaptured[WIDTH-2];
+			   output logic [383:0] data_frame,
+			   output logic data_ready);			  
+	logic [WIDTH-1:0] data_frame_buff;
+	logic [WIDTH-1:0] data_frame_buff_stable;	
+	logic [10:0] sck_count = 0;
+	
+	assign data_ready = ~CE;
+
+	always_ff @(posedge sck)begin
+		{data_frame_buff} = {data_frame_buff[WIDTH-2:0], sdi};
     end
-    // when done is first asserted, shift out msb before clock edge
-    assign sdo = (done & !wasdone) ? cyphertext[WIDTH-1] : sdodelayed;
+    always_ff @(negedge sck) begin
+        sdo <= data_frame_buff[WIDTH-1];
+	end	
+	/*always_ff @(posedge clk)begin
+		if(data_ready) data_frame_buff_stable<=data_frame_buff;
+	end*/
+
+	always_ff @(negedge CE)begin
+		data_frame_buff_stable<=data_frame_buff;
+	end
+
+	always_comb begin
+		for ( int i = 64; i >0; i= i-1) begin
+			 /*
+			 data_frame[6*i-1] = data_frame_buff_stable[8*i-1];
+			 data_frame[6*i-2] = data_frame_buff_stable[8*i-2];
+			 data_frame[6*i-3] = data_frame_buff_stable[8*i-3];
+			 data_frame[6*i-4] = data_frame_buff_stable[8*i-4];
+			 data_frame[6*i-5] = data_frame_buff_stable[8*i-5];
+			 data_frame[6*i-6] = data_frame_buff_stable[8*i-6];
+			 */
+			 
+			 data_frame[6*i-1] = data_frame_buff_stable[8*i-3];
+			 data_frame[6*i-2] = data_frame_buff_stable[8*i-4];
+			 data_frame[6*i-3] = data_frame_buff_stable[8*i-5];
+			 data_frame[6*i-4] = data_frame_buff_stable[8*i-6];
+			 data_frame[6*i-5] = data_frame_buff_stable[8*i-7];
+			 data_frame[6*i-6] = data_frame_buff_stable[8*i-8];
+		end
+	end
 endmodule
+
+/*module SPIIn #(WIDTH=512)(
+			   input  logic clk,
+			   input  logic sck, 
+               input  logic sdi,
+			   input  logic CE,
+			   input  logic reset,
+               output logic sdo,
+			   output logic [383:0] data_frame,
+			   output logic data_ready);			  
+	logic [WIDTH-1:0] data_frame_buff;
+	logic [WIDTH-1:0] data_frame_buff_stable;	
+	logic [10:0] sck_count = 0;
+	
+	assign data_ready = ~CE;
+
+	always_ff @(posedge sck)begin
+		{data_frame_buff} = {data_frame_buff[WIDTH-2:0], sdi};
+    end
+    always_ff @(negedge sck) begin
+        sdo <= data_frame_buff[WIDTH-1];
+	end	
+	always_ff @(posedge clk)begin
+		if(data_ready) data_frame_buff_stable<=data_frame_buff;
+	end
+	//always_ff @(negedge CE)begin
+		//data_frame_buff_stable<=data_frame_buff;
+	//end
+
+	always_comb begin
+		for ( int i = 64; i >0; i= i-1) begin
+			 //data_frame [6*i-1: 6*(i-1) ] = data_frame_buff_stable [8*i-1: 6*(i-1)];
+			 data_frame[6*i-1] = data_frame_buff_stable[8*i-1];
+			 data_frame[6*i-2] = data_frame_buff_stable[8*i-2];
+			 data_frame[6*i-3] = data_frame_buff_stable[8*i-3];
+			 data_frame[6*i-4] = data_frame_buff_stable[8*i-4];
+			 data_frame[6*i-5] = data_frame_buff_stable[8*i-5];
+			 data_frame[6*i-6] = data_frame_buff_stable[8*i-6];
+		end
+	end
+endmodule*/
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////
+//				Wire Array to Matrix								//
+//		Should synthesize to a bunch of wires						//
+//////////////////////////////////////////////////////////////////////
+
+module WireArrayToMatrix #(WIDTH=64, DEPTH=6)  (input logic [WIDTH*DEPTH-1:0]array_in,
+												output logic [DEPTH-1:0] matrix_out [WIDTH-1:0]);
+	genvar i;
+	for ( i = WIDTH; i>0; i=i-1) begin
+		assign matrix_out [i-1] = array_in [(DEPTH*i-1): DEPTH*(i-1)];
+	end
+	
+endmodule
+
+
+
 
 
 

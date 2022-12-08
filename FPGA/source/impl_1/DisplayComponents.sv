@@ -1,7 +1,6 @@
 /***************************************************************************************************************************/
 /*											DISPLAYCOMPONENTS.SV														   */
 /***************************************************************************************************************************/
-
 //////////////////////////////////////////////////////////////////////
 //						COLSHIFT	MODULE							//
 //		Shifts the column data into ths shift registers 			//
@@ -106,7 +105,7 @@ endmodule
 //		address, latching the data, and asserting / deasserting		//									
 //		blank.														//									
 //////////////////////////////////////////////////////////////////////
-typedef enum logic [9:0] {reset_mod, shift_mod, blank_mod, addr_set_mod, latch_mod, unblank_mod, wait_mod, cnt_inc_mod, check_cnt_mod, pwm_overflow_mod, more_wait_mod} ColorModState;
+typedef enum logic [9:0] {reset_mod, shift_mod, blank_mod, addr_set_mod, latch_mod, unblank_mod, wait_mod, cnt_inc_mod, check_cnt_mod, pwm_overflow_mod, increment_wait_mod, memory_wait_mod} ColorModState;
 module ColorModFSM #(WIDTH=4)  (input logic clk,
 								input logic reset,
 								input logic col_cnt_overflow,
@@ -140,24 +139,26 @@ module ColorModFSM #(WIDTH=4)  (input logic clk,
 		case(current_state)
 			reset_mod: 		if(pwm_en) next_state = addr_set_mod;
 							else next_state = reset_mod;
-			addr_set_mod: 	next_state = shift_mod;
-			
+			//addr_set_mod: 	next_state = shift_mod;
+			addr_set_mod: 	if(pwm_en) next_state = shift_mod;
+							else next_state = memory_wait_mod;
+			memory_wait_mod: if(pwm_en) next_state = shift_mod;
+							 else next_state = memory_wait_mod;
 			shift_mod: 		if(col_cnt_overflow)next_state = blank_mod;
 							else next_state = shift_mod;
 			blank_mod: 		next_state = latch_mod;
-			
 			latch_mod: 		next_state = unblank_mod;
 			unblank_mod:	next_state = wait_mod;
 			wait_mod: 		next_state = cnt_inc_mod; 
 			
 			cnt_inc_mod: 	next_state = check_cnt_mod;
 			check_cnt_mod: 	if(pwm_cnt==0 ) next_state = pwm_overflow_mod;
-							else next_state =shift_mod;				
-								
-			pwm_overflow_mod: next_state = more_wait_mod;
+							else next_state =shift_mod;										
+			pwm_overflow_mod: next_state = increment_wait_mod;
+			increment_wait_mod:  next_state = addr_set_mod;	
 			
-			more_wait_mod:  next_state = addr_set_mod;
 			
+
 			default: 		next_state = reset_mod;
 			//TODO: NEED ANOTHER WAIT SIGNAL TO ENSURE STUFF FOR WHEN WE'RE GONNA READ AND WRITE DATA
 		endcase
@@ -165,6 +166,7 @@ module ColorModFSM #(WIDTH=4)  (input logic clk,
 	assign latch = current_state==latch_mod;
 	//assign blank = ~(current_state==blank_mod|| current_state==addr_set_mod || current_state==latch_mod);
 	assign blank = ~( current_state==unblank_mod || current_state==wait_mod);
+	//assign blank = ~( current_state==unblank_mod );
 	assign pwm_inc = (current_state ==cnt_inc_mod);
 	assign row_0_sel = next_addr;
 	assign row_1_sel = next_addr+32;
@@ -184,30 +186,6 @@ module ColorModFSM #(WIDTH=4)  (input logic clk,
 
 endmodule
 
-typedef enum logic [2:0] {noval_of, val_of, fall_of} OverflowState;
-module OverFlowDetector #(WIDTH=4)  (input logic clk,
-									 input  logic [WIDTH-1:0]value,
-									 output logic overflow);
-	OverflowState current_state, next_state;
-	//state register
-	always_ff @(posedge clk) begin
-		current_state<=next_state;
-	end
-	
-	//nextstate logic
-	always_comb
-		case(current_state)
-			noval_of:	if(value == (1<<WIDTH)-1) next_state = val_of;
-						else next_state = noval_of;
-			val_of:		if(value==0) next_state=fall_of;
-						else next_state = val_of;
-			fall_of:	if(value == (1<<WIDTH)-1) next_state = val_of;
-						else next_state=noval_of;
-			default: next_state = noval_of;
-		endcase
-	//output logic
-	assign overflow = current_state==fall_of;
-endmodule
 
 
 //////////////////////////////////////////////////////////////////////
@@ -216,7 +194,7 @@ endmodule
 //		components													//
 //																	//
 //////////////////////////////////////////////////////////////////////
-typedef enum logic [4:0] {reset_main, pwm_en_main, pwm_main, increment_main, wait_main,memread_main, more_wait_main} MainDisplayState;
+typedef enum logic [4:0] {reset_main, pwm_en_main, pwm_main, increment_main, addr_set_wait_main,memread_main, mem_src_main, data_switch_main} MainDisplayState;
 module MainDisplayFSM  (input logic clk,
 						input logic reset,
 						input logic pwm_overflow,
@@ -243,15 +221,24 @@ module MainDisplayFSM  (input logic clk,
 		case (current_state)
 			
 			
-			reset_main:		next_state = memread_main;
-			memread_main:	next_state = pwm_main;
-			pwm_main:		if(pwm_overflow) next_state = increment_main;
-							else next_state = pwm_main;
-			increment_main: next_state = wait_main;
-			wait_main: next_state = more_wait_main;
-			more_wait_main: next_state = memread_main;
+			reset_main:			next_state = memread_main;
+			memread_main:		next_state = pwm_main;
+			pwm_main:			if(pwm_overflow) next_state = increment_main;
+								else next_state = pwm_main;
+			increment_main: 	next_state = addr_set_wait_main;
+			
+			addr_set_wait_main: if(current_addr==31) next_state = mem_src_main;
+								else next_state=memread_main;
 			
 			
+			mem_src_main: 		if(current_addr==0) next_state = data_switch_main;
+								else next_state = memread_main;
+			
+			data_switch_main: next_state = memread_main;
+			
+			//wait_buffer_main:	next_state = memread_main;
+			
+			default: next_state = reset_main;
 			
 			
 			
@@ -259,7 +246,8 @@ module MainDisplayFSM  (input logic clk,
 	//output logic
 	assign pwm_en = current_state==pwm_main;
 	assign row_inc = current_state==increment_main;
-	assign read_en = current_state==memread_main;
+	//assign read_en = current_state==memread_main;
+	assign read_en = current_state==data_switch_main;
 	
 endmodule
 
@@ -286,13 +274,12 @@ module MapRGB #(WIDTH=4)   (input logic [5:0] row_0_sel,
 	//adjusts the mapping based on amplitude?
 	always_comb begin	
 		for (int i=0; i<64;i=i+1) begin
-			r0[i]= row_0[i]*15;
-			r1[i]= row_1[i]*15;
-			
-			g0[i]= row_0[i]*14;
-			g1[i]= row_1[i]*14;
-			b0[i]= row_0[i]*5;
-			b1[i]= row_1[i]*5;
+			r0[i]= row_0[i]*row_0_sel;
+			g0[i]= row_0[i]*15;
+			b0[i]= row_0[i]*14;
+			r1[i]= row_1[i]*row_1_sel;
+			g1[i]= row_1[i]*15;
+			b1[i]= row_1[i]*14;
 			/*
 			r0[i]= row_0[i]*row_0_sel;
 			r1[i]= row_1[i]*row_1_sel;

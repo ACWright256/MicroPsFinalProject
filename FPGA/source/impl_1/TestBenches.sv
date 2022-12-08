@@ -3,6 +3,173 @@
 //******************************************************************//
 
 
+//////////////////////////////////////////////////////////////////////
+//							SPI Display TESTBENCH							//
+//////////////////////////////////////////////////////////////////////
+module SPIDisplay_tb();
+	
+	
+	logic spi_sck;
+	logic sdi;
+	logic CE;
+	logic sdo;
+	logic r0_out;
+	logic r1_out;
+	logic g0_out;
+	logic g1_out;
+	logic b0_out;
+	logic b1_out;  
+	logic latch;
+	logic OE;
+	logic sck;
+	logic [4:0] addr;
+	logic clk;
+	logic reset;
+	
+
+	//DUT
+	SPIDisplayController DisplayControl(reset, spi_sck, sdi, CE, clk, sdo, r0_out, r1_out, g0_out, g1_out, b0_out, b1_out, latch, OE, sck, addr);
+	
+	logic [10:0] i;
+	Clk TestClk(clk);
+	logic [511:0] return_msg, in_data;
+
+    initial begin
+      i = 0;
+	  CE = 1;
+	  reset = 1;
+    end
+
+    initial begin   
+        in_data    <= 512'h0004080C1014181C2024282C3034383C4044484C5054585C6064686C7074787C8084888C9094989CA0A4A8ACB0B4B8BCC0C4C8CCD0D4D8DCE0E4E8ECF0F4F8FC;
+        //in_data      <= 512'hFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFC;
+    end
+
+    // shift in test vectors, wait until done, and shift out result
+    always @(posedge clk) begin
+	
+	  if(i==1) reset<=0;
+      if (i == 512) 
+		  begin
+			  //return_msg[511] = sdo;
+			CE = 1'b0;
+		  end
+      if (i<512) begin
+        #1; sdi = in_data[511-i];
+        #1; spi_sck = 1; #5; spi_sck = 0;
+		return_msg[512-i] = sdo;
+        i = i + 1;
+      end 
+	  
+
+    end
+	
+	
+	
+endmodule;
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////
+//							SPI TESTBENCH							//
+//////////////////////////////////////////////////////////////////////
+module SPI_tb();
+	
+	
+	logic reset;
+	assign reset = 0;
+    logic clk, data_ready, CE, sck, sdi, sdo;
+    logic [383:0] data_frame; 
+	
+	logic [511:0] return_msg, in_data;
+	
+	
+	
+    logic [10:0] i;
+    // Added delay
+    logic delay;
+    
+    // device under test
+	SPIIn DUT(clk, sck, sdi, CE, reset, sdo, data_frame, data_ready);
+    
+    // test case
+    initial begin   
+        //in_data    <= 512'h0C1C2C3C4C5C6C7C8C9CACBCCCDCECFC0C1C2C3C4C5C6C7C8C9CACBCCCDCECFC0C1C2C3C4C5C6C7C8C9CACBCCCDCECFC0C1C2C3C4C5C6C7C8C9CACBCCCDCECFC;
+        in_data      <= 512'hFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFCFC;
+    end
+    
+    // generate clock and load signals
+    initial 
+        forever begin
+            clk = 1'b0; #5;
+            clk = 1'b1; #5;
+        end
+        
+    initial begin
+      i = 0;
+	  CE = 1;
+    end
+
+    // shift in test vectors, wait until done, and shift out result
+    always @(posedge clk) begin
+      if (i == 512) 
+		  begin
+			  //return_msg[511] = sdo;
+			CE = 1'b0;
+		  end
+      if (i<512) begin
+        #1; sdi = in_data[511-i];
+        #1; sck = 1; #5; sck = 0;
+		return_msg[512-i] = sdo;
+        i = i + 1;
+      end 
+	  /*else if(i<1024)begin
+		 
+		#1; sdi = in_data[511-i];
+		
+        #1; sck = 1; #5; sck = 0;
+		return_msg[512-(i-512)] = sdo;
+        i = i + 1;
+	  end*/
+    end
+    
+endmodule
+
+
+
+
+module IntegratedEBR_tb();
+	parameter COLORWID=4;
+	logic clk;
+	logic reset;
+	logic r0_out;
+	logic r1_out;
+	logic g0_out;
+	logic g1_out;
+	logic b0_out;
+	logic b1_out;
+	logic OE;
+	logic sck;
+	logic [4:0] addr;
+	
+	initial begin
+		#5;
+		reset <=1;
+		#10;
+		reset<=0;
+	end
+	
+	Clk TestClk(clk);
+	TESTEBRDisplay #(.WIDTH(COLORWID))   DUT(clk, reset,r0_out, r1_out,g0_out,g1_out, b0_out,b1_out, latch,OE, sck,addr);
+	
+	
+endmodule
+
+
+
 
 //////////////////////////////////////////////////////////////////////
 //					EBRController TESTBENCH							//
@@ -31,23 +198,24 @@ module EBRController_tb();
 		//y_in<= '{default:5'b00001};		//set y_in to all 1's
 		row_0_sel<=0;		//set row_0_sel to 0
 		row_1_sel<=32;		//set row_1_sel to 0
-		
-		
 		#10;
 		w_enable <=1;
 		#10;
 		w_enable<=0;
-		
-		#10;
 		#10;
 		#10;
 		get_buffer<=1'b1;	
 		#10;
-		get_buffer<=1'b0;	
+		get_buffer<=1'b0;
+		r_enable<=1;
 		#10;
 
+
+
 		//#10;
-		r_enable<=1;
+		
+		
+
 	end
 	
 	//the DUT
@@ -59,8 +227,7 @@ module EBRController_tb();
 	//main test loop
 	always @(posedge clk) begin
 		//increment
-		row_0_sel = row_0_sel+1;
-		row_1_sel = row_1_sel+1;
+
 		if (row_0_sel==10)begin
 			r_enable<=0;
 			$readmemb("EBR1.tv",y_in);
@@ -68,16 +235,87 @@ module EBRController_tb();
 			#10;
 			w_enable<=0;
 			#10;
-			//#10;
 			get_buffer<=1'b1;	
 			#10;
-			//#10;
 			get_buffer<=1'b0;
 			#10;
 			r_enable<=1;
 		end
+		
+		row_0_sel = row_0_sel+1;
+		row_1_sel = row_1_sel+1;
 	end
 		
+endmodule
+
+//////////////////////////////////////////////////////////////////////
+//					EBRWriteControl TESTBENCH						//
+//////////////////////////////////////////////////////////////////////
+module EBRWriteControl_tb();
+	logic clk;
+	logic reset;
+	logic w_en;
+	logic get_buffer;
+	logic[5:0] y_in[63:0];
+	logic [63:0] out_write_buffer [63:0];
+	Clk TestClk(clk);
+
+
+	
+	initial begin
+		y_in<= {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63};
+		get_buffer<=0;
+		#5;
+		reset<=1;
+		#10;
+		reset<=0;
+		#10;
+		w_en<=1;
+		#10;
+		w_en<=0;
+		get_buffer<=1;
+		#10;
+		#10;
+		#10;
+		#10;
+		#10;
+		#10;
+		y_in<= {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+		#10;
+		w_en<=1;
+		#10;
+		w_en<=0;
+	end
+	
+	
+	//DUT
+	EBRWriteControl DUT (clk, reset, w_en, get_buffer, y_in, out_write_buffer);
+	
+	
+	
+endmodule
+
+
+
+//////////////////////////////////////////////////////////////////////
+//					EBRReadControl TESTBENCH						//
+//////////////////////////////////////////////////////////////////////
+module EBRReadControl_tb();
+	logic clk;
+	logic reset;
+	logic r_en;
+	logic get_buffer;
+	logic [5:0] row_0_sel;
+	logic [5:0] row_1_sel;
+	logic [63:0] write_buffer [63:0];
+	logic [63:0] row_0;
+	logic [63:0]row_1;
+
+	Clk TestClk(clk);
+
+	//DUT
+	EBRReadControl DUT(clk, reset, r_en, get_buffer, row_0_sel, row_1_sel, write_buffer, row_0, row_1);
+
 endmodule
 
 
@@ -85,6 +323,7 @@ endmodule
 //////////////////////////////////////////////////////////////////////
 //							ColShift TESTBENCH						//
 //////////////////////////////////////////////////////////////////////
+
 
 module MainDisplayFSM_tb();
 	
